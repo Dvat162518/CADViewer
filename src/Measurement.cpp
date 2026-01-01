@@ -95,13 +95,13 @@ void MeasurementManager::calculateMeasurements()
             props.size = QString::number(sizeBytes / 1024.0, 'f', 2) + " KB";
         }
     } else {
-        props.filename = "Unknown";
+        props.filename = "-";
         props.size = "-";
         props.location = "-";
     }
 
     // Init defaults
-    props.type = "Unknown";
+    props.type = "-";
     props.originX = 0.0; props.originY = 0.0; props.originZ = 0.0;
     props.area = 0.0; props.volume = 0.0; props.length = 0.0;
     props.radius = 0.0; props.diameter = 0.0; props.angle = 0.0;
@@ -190,7 +190,7 @@ void MeasurementManager::calculateMeasurements()
         props.type = types.join("+");
     } else {
         // If nothing selected, we show File Info + Origin
-        props.type = "Whole Model";
+        props.type = "-";
     }
 
     // =========================================================

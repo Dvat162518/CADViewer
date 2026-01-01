@@ -74,7 +74,7 @@ private:
 
 
     // OpenGL context and window management functions
-    
+
     //! Get OpenGL context from view
     Handle(OpenGl_Context) GetGlContext(const Handle(V3d_View)& theView);
 

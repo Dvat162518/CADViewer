@@ -14,16 +14,18 @@ set(CMAKE_AUTOUIC ON)
 # Find Qt6
 # ============================================================
 find_package(Qt6 COMPONENTS
-Core
-Gui
-OpenGL
-OpenGLWidgets
-REQUIRED
+    Core
+    Gui
+    Widgets
+    OpenGL
+    OpenGLWidgets
+    REQUIRED
 )
 
 # ============================================================
-# Find OpenCASCADE (OCCT) 7.7
+# Find OpenCASCADE (OCCT)
 # ============================================================
+# Preserved from parent CMake: Explicit path for OCCT
 set(OpenCASCADE_DIR "/opt/occt-7.7/lib/cmake/opencascade")
 find_package(OpenCASCADE REQUIRED)
 
@@ -35,68 +37,77 @@ message(STATUS "OpenCASCADE libraries: ${OpenCASCADE_LIBRARIES}")
 # Source Files
 # ============================================================
 set(PROJECT_SOURCES
-# Headers
-include/OcctQMainWindowSample.h
-include/OcctQWidgetViewer.h
-include/OcctQtTools.h
-include/OcctGlTools.h
+    # Headers
+    include/OcctQMainWindowSample.h
+    include/Core.h              # Renamed from OcctQWidgetViewer.h
+    include/CadModel.h
+    include/Render.h
+    include/Measurement.h
+    include/Input.h
+    include/Event.h
+    include/OcctQtTools.h
+    include/OcctGlTools.h
 
-# Source files
-src/main.cpp
-src/OcctQMainWindowSample.cpp
-src/OcctQWidgetViewer.cpp
-src/OcctQtTools.cpp
-src/OcctGlTools.cpp
+    # Source files
+    src/main.cpp
+    src/OcctQMainWindowSample.cpp
+    src/Core.cpp            # Renamed from OcctQWidgetViewer.cpp
+    src/CadModel.cpp
+    src/Render.cpp
+    src/Measurement.cpp
+    src/Input.cpp
+    src/Event.cpp
+    src/OcctQtTools.cpp
+    src/OcctGlTools.cpp
 )
 
 # ============================================================
 # Create Executable
 # ============================================================
-add_executable(${PROJECT_NAME} ${PROJECT_SOURCES}
+add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
 
+# ============================================================
+# Link Libraries
+# ============================================================
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::OpenGL
+    Qt6::OpenGLWidgets
+    ${OpenCASCADE_LIBRARIES}
 )
 
 # ============================================================
 # Include Directories
 # ============================================================
 target_include_directories(${PROJECT_NAME} PRIVATE
-${CMAKE_CURRENT_SOURCE_DIR}/include
-${OpenCASCADE_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${OpenCASCADE_INCLUDE_DIR}
 )
 
 # ============================================================
-# Link Libraries
-# ============================================================
-target_link_libraries(${PROJECT_NAME} PRIVATE
-Qt6::Core
-Qt6::Gui
-Qt6::OpenGL
-Qt6::OpenGLWidgets
-${OpenCASCADE_LIBRARIES}
-)
-
-# ============================================================
-# Compiler Flags
+# Compiler Options (Preserved from parent)
 # ============================================================
 if(MSVC)
-target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
 else()
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # ============================================================
-# Output Directory
+# Output Directory (Preserved from parent)
 # ============================================================
 set_target_properties(${PROJECT_NAME} PROPERTIES
-RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # ============================================================
-# OCCT-specific Settings
+# OCCT-specific Settings (Preserved from parent)
 # ============================================================
 # Enable OCCT features we need
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-OCCT_INCLUDE_DIR="${OpenCASCADE_INCLUDE_DIR}"
+    OCCT_INCLUDE_DIR="${OpenCASCADE_INCLUDE_DIR}"
 )
 
 # ============================================================
@@ -109,12 +120,7 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "")
 message(STATUS "Qt6 Version: ${Qt6_VERSION}")
-message(STATUS "Qt6 Path: ${Qt6_DIR}")
-message(STATUS "")
-message(STATUS "OpenCASCADE Version: ${OpenCASCADE_VERSION}")
 message(STATUS "OpenCASCADE Path: ${OpenCASCADE_DIR}")
-message(STATUS "OpenCASCADE Include: ${OpenCASCADE_INCLUDE_DIR}")
-message(STATUS "OpenCASCADE Libraries: ${OpenCASCADE_LIBRARIES}")
 message(STATUS "")
 message(STATUS "Output: ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME}")
 message(STATUS "====================================================")

@@ -1,4 +1,4 @@
-// Core.cpp (OcctQWidgetViewer.cpp)
+// Core.cpp
 #include "Core.h"
 #include "CadModel.h"
 #include "Render.h"
@@ -74,8 +74,8 @@ OcctQWidgetViewer::OcctQWidgetViewer(QWidget* theParent)
         setFocusPolicy(Qt::StrongFocus);
         setUpdatesEnabled(true);
 
-        // Initialize OpenGL
-        initializeGL();
+        // REMOVED: initializeGL(); to prevent BadWindow on Linux
+        // Initialization happens in paintEvent
 
         Message::SendInfo() << "OcctQWidgetViewer initialized successfully";
 
@@ -131,6 +131,10 @@ void OcctQWidgetViewer::clearAllShapes() { m_render->clearAllShapes(); }
 void OcctQWidgetViewer::fitViewToModel() { m_render->fitViewToModel(); }
 void OcctQWidgetViewer::displayOriginAxis() { m_render->displayOriginAxis(); }
 void OcctQWidgetViewer::meshShape(const TopoDS_Shape& s, double d) { m_render->meshShape(s, d); }
+
+// --- NEW ---
+void OcctQWidgetViewer::displayModelOrigin(const gp_Pnt& p) { m_render->displayModelOrigin(p); }
+// -----------
 
 bool OcctQWidgetViewer::loadCADModel(const QString& p) { return m_cadModel->loadCADModel(p); }
 bool OcctQWidgetViewer::loadSTEPFile(const QString& p) { return m_cadModel->loadSTEPFile(p); }

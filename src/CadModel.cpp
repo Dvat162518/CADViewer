@@ -1,6 +1,6 @@
 // CadModel.cpp
 #include "CadModel.h"
-#include "Core.h" // Access to OcctQWidgetViewer internals
+#include "Core.h"
 #include "OcctQtTools.h"
 
 // OCCT File I/O Headers
@@ -63,6 +63,12 @@ bool CadModelManager::loadCADModel(const QString& theFilePath)
     if (aSuccess) {
         m_viewer->myCurrentFilePath = theFilePath;
         m_viewer->fitViewToModel();
+
+        // --- FIX: Update Data Immediately ---
+        // Calculate file info and origin right now
+        m_viewer->calculateMeasurements();
+        // ------------------------------------
+
         m_viewer->updateView();
 
         QFileInfo aFileInfo(theFilePath);
@@ -81,7 +87,7 @@ bool CadModelManager::loadSTEPFile(const QString& theFilePath)
 
     try {
         OCC_CATCH_SIGNALS
-        TCollection_AsciiString aPath = OcctQtTools::qtStringToOcct(theFilePath);
+            TCollection_AsciiString aPath = OcctQtTools::qtStringToOcct(theFilePath);
         STEPControl_Reader aReader;
 
         IFSelect_ReturnStatus aStatus = aReader.ReadFile(aPath.ToCString());
@@ -108,8 +114,6 @@ bool CadModelManager::loadSTEPFile(const QString& theFilePath)
         m_viewer->clearAllShapes();
         m_viewer->displayShape(aShape);
         m_viewer->myLoadedShape = aShape;
-        m_viewer->fitViewToModel();
-        m_viewer->updateView();
 
         Message::SendInfo() << "STEP file loaded successfully";
         return true;
@@ -127,7 +131,7 @@ bool CadModelManager::loadIGESFile(const QString& theFilePath)
 
     try {
         OCC_CATCH_SIGNALS
-        TCollection_AsciiString aPath = OcctQtTools::qtStringToOcct(theFilePath);
+            TCollection_AsciiString aPath = OcctQtTools::qtStringToOcct(theFilePath);
         IGESControl_Reader aReader;
 
         IFSelect_ReturnStatus aStatus = aReader.ReadFile(aPath.ToCString());

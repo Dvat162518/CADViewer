@@ -5,10 +5,12 @@
 #include <TopoDS_Shape.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <V3d_View.hxx>
+#include <AIS_InteractiveObject.hxx> // Added for Handle(AIS_InteractiveObject)
 
 class OcctQWidgetViewer;
 class QPaintEvent;
 class QResizeEvent;
+class gp_Pnt;
 
 class RenderManager
 {
@@ -21,7 +23,12 @@ public:
     void displayShape(const TopoDS_Shape& theShape);
     void clearAllShapes();
     void fitViewToModel();
-    void displayOriginAxis();
+    void displayOriginAxis(); // Global 0,0,0
+
+    // --- NEW: Display specific model origin ---
+    void displayModelOrigin(const gp_Pnt& thePnt);
+    // ------------------------------------------
+
     void meshShape(const TopoDS_Shape& theShape, double theDeflection);
     void dumpGlInfo(bool theIsBasic, bool theToPrint);
     void updateView();
@@ -30,6 +37,9 @@ public:
 
 private:
     OcctQWidgetViewer* m_viewer;
+
+    // Track the specific object to allow updating it
+    Handle(AIS_InteractiveObject) myModelOriginVis;
 };
 
 #endif // _Render_HeaderFile

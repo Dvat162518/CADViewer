@@ -31,7 +31,8 @@ void InputManager::keyPressEvent(QKeyEvent* theEvent)
 
     switch (aKey) {
     case Aspect_VKey_Escape:
-        QApplication::exit();
+        // Clear selection on Escape, but keep model data
+        m_viewer->clearAllShapes(); // Or just ClearSelected if you prefer
         return;
 
     case Aspect_VKey_F:
@@ -61,13 +62,11 @@ void InputManager::mouseMoveEvent(QMouseEvent* theEvent)
     const Standard_Integer aY = theEvent->pos().y();
 
     try {
-        // If mouse button is pressed, handle rotation/pan
         if (theEvent->buttons() != Qt::NoButton) {
             if (OcctQtTools::qtHandleMouseEvent(*m_viewer, m_viewer->myView, theEvent)) {
                 m_viewer->updateView();
             }
         }
-        // Otherwise just highlight (hover)
         else {
             m_viewer->myContext->MoveTo(aX, aY, m_viewer->myView, Standard_True);
         }
@@ -106,9 +105,9 @@ void InputManager::mousePressEvent(QMouseEvent* theEvent)
 
             // CASE A: User clicked on a Shape or ViewCube
             if (m_viewer->myContext->HasDetected()) {
-
-                // Check if ViewCube
                 Handle(AIS_InteractiveObject) aDetected = m_viewer->myContext->DetectedInteractive();
+
+                // ViewCube Logic
                 if (!aDetected.IsNull() && aDetected == m_viewer->myViewCube) {
                     m_viewer->myContext->SelectDetected(AIS_SelectionScheme_Replace);
                     m_viewer->myContext->UpdateCurrentViewer();
@@ -117,61 +116,34 @@ void InputManager::mousePressEvent(QMouseEvent* theEvent)
                 }
 
                 // Normal Shape Selection
-                // âœ… CRITICAL: Using SelectDetected() correctly applies the highlight
                 if (theEvent->modifiers() & Qt::ControlModifier) {
-                    // CTRL HELD: Add/Remove (XOR)
                     m_viewer->myContext->SelectDetected(AIS_SelectionScheme_XOR);
                 } else {
-                    // NO CTRL: Replace selection
                     m_viewer->myContext->SelectDetected(AIS_SelectionScheme_Replace);
                 }
 
-                // âœ… FORCE UPDATE: Ensure visual feedback happens immediately
                 m_viewer->myContext->UpdateCurrentViewer();
 
-                // Calculate measurements AFTER selection is confirmed
+                // Recalculate based on specific selection
                 m_viewer->calculateMeasurements();
             }
-            // CASE B: User clicked on Empty Space
+            // CASE B: User clicked on Empty Space (Deselect)
             else {
                 m_viewer->myContext->ClearSelected(Standard_False);
                 m_viewer->clearLabels();
                 m_viewer->myContext->UpdateCurrentViewer();
 
-                // âœ… FIX: Don't send empty props! Populate file info.
-                ModelProperties props;
+                // --- FIX: Recalculate instead of sending empty props ---
+                // This ensures Filename, Size, and Origin remain visible
+                // even when nothing is selected.
+                m_viewer->calculateMeasurements();
+                // -----------------------------------------------------
 
-                // 1. Fill File Metadata (Copy this logic or make a helper function)
-                if (!m_viewer->myCurrentFilePath.isEmpty()) {
-                    QFileInfo fi(m_viewer->myCurrentFilePath);
-                    props.filename = fi.fileName();
-                    props.location = fi.absolutePath();
-
-                    double sizeBytes = fi.size();
-                    if (sizeBytes > 1024 * 1024) {
-                        props.size = QString::number(sizeBytes / (1024.0 * 1024.0), 'f', 2) + " MB";
-                    } else {
-                        props.size = QString::number(sizeBytes / 1024.0, 'f', 2) + " KB";
-                    }
-                } else {
-                    props.filename = "None";
-                    props.size = "-";
-                    props.location = "-";
-                }
-
-                // 2. Zero out measurements
-                props.type = "None"; // Explicitly say "None"
-                props.originX = 0; props.originY = 0; props.originZ = 0;
-                props.area = 0; props.volume = 0; props.length = 0;
-                props.radius = 0; props.diameter = 0; props.angle = 0;
-
-                emit m_viewer->measurementsUpdated(props, ""); // Send with empty point data
                 if (OcctQtTools::qtHandleMouseEvent(*m_viewer, m_viewer->myView, theEvent)) {
                     m_viewer->updateView();
                 }
             }
 
-            // Final Qt widget repaint
             m_viewer->updateView();
         }
 

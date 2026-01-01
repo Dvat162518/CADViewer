@@ -18,10 +18,10 @@
 #include <gp_Pnt.hxx>
 #include <AIS_TextLabel.hxx>
 #include <AIS_Shape.hxx>
-#include <QtMath>
-#include <QFileInfo>
 #include <Message.hxx>
 #include <Standard_Failure.hxx>
+#include <QtMath>
+#include <QFileInfo>
 
 MeasurementManager::MeasurementManager(OcctQWidgetViewer* viewer)
     : m_viewer(viewer)
@@ -63,7 +63,6 @@ void MeasurementManager::clearLabels()
 {
     if (m_viewer->myContext.IsNull()) return;
 
-    // Iterate over base class handles
     for (const Handle(AIS_InteractiveObject)& anObj : std::as_const(m_viewer->myPointLabels)) {
         m_viewer->myContext->Remove(anObj, Standard_False);
     }
@@ -72,13 +71,18 @@ void MeasurementManager::clearLabels()
 
 void MeasurementManager::calculateMeasurements()
 {
-    // 1. Clear old labels
+    // 1. Clear old 3D labels (P1, P2, etc.)
     clearLabels();
 
     // 2. Initialize Properties Structure
     ModelProperties props;
 
-    // --- ✅ A. POPULATE FILE METADATA ---
+    // =========================================================
+    // SECTION A: FILE METADATA & WHOLE MODEL ORIGIN
+    // (This runs regardless of selection)
+    // =========================================================
+
+    // A1. File Metadata
     if (!m_viewer->myCurrentFilePath.isEmpty()) {
         QFileInfo fi(m_viewer->myCurrentFilePath);
         props.filename = fi.fileName();
@@ -96,25 +100,55 @@ void MeasurementManager::calculateMeasurements()
         props.location = "-";
     }
 
-    // Init other props
+    // Init defaults
     props.type = "Unknown";
     props.originX = 0.0; props.originY = 0.0; props.originZ = 0.0;
     props.area = 0.0; props.volume = 0.0; props.length = 0.0;
     props.radius = 0.0; props.diameter = 0.0; props.angle = 0.0;
 
-    // Metrics tracking
+    // A2. Calculate Model Origin (Center of Mass)
+    if (!m_viewer->myLoadedShape.IsNull()) {
+        GProp_GProps globalProps;
+
+        // Priority: Solid -> Surface -> Linear (Wireframe)
+        BRepGProp::VolumeProperties(m_viewer->myLoadedShape, globalProps);
+        if (globalProps.Mass() < 1e-6) {
+            BRepGProp::SurfaceProperties(m_viewer->myLoadedShape, globalProps);
+        }
+        if (globalProps.Mass() < 1e-6) {
+            BRepGProp::LinearProperties(m_viewer->myLoadedShape, globalProps);
+        }
+
+        // If geometry has mass/length, extract Center
+        if (globalProps.Mass() > 1e-9) {
+            gp_Pnt center = globalProps.CentreOfMass();
+            props.originX = center.X();
+            props.originY = center.Y();
+            props.originZ = center.Z();
+
+            // --- VISUAL UPDATE: Show XYZ Trihedron at Origin ---
+            m_viewer->displayModelOrigin(center);
+            // ---------------------------------------------------
+        }
+    }
+
+    // =========================================================
+    // SECTION B: SELECTION PROCESSING
+    // (Calculate specific metrics for selected items)
+    // =========================================================
+
     double totalArea = 0.0;
     double totalLength = 0.0;
     double totalVolume = 0.0;
     double lastDiameter = 0.0;
     double lastAngle = 0.0;
 
-    QString pointTableData = "";
+    QString pointTableData = ""; // For the UI Table
 
-    // 3. Collect Unique Edges & Calculate Metrics
     TopTools_IndexedMapOfShape aUniqueEdges;
     QStringList types;
 
+    // Iterate Selection
     m_viewer->myContext->InitSelected();
     while (m_viewer->myContext->MoreSelected()) {
         TopoDS_Shape aShape = m_viewer->myContext->SelectedShape();
@@ -129,7 +163,7 @@ void MeasurementManager::calculateMeasurements()
                 BRepGProp::SurfaceProperties(aFace, aProps);
                 totalArea += aProps.Mass();
 
-                // Extract Edges from Face
+                // Extract Edges from Face for highlighting/calc
                 TopExp_Explorer anEdgeExplorer(aFace, TopAbs_EDGE);
                 while (anEdgeExplorer.More()) {
                     aUniqueEdges.Add(anEdgeExplorer.Current());
@@ -150,34 +184,45 @@ void MeasurementManager::calculateMeasurements()
         }
         m_viewer->myContext->NextSelected();
     }
-    props.type = types.join("+");
 
-    // 4. Process Edges List
+    // Set Display Type
+    if (!types.isEmpty()) {
+        props.type = types.join("+");
+    } else {
+        // If nothing selected, we show File Info + Origin
+        props.type = "Whole Model";
+    }
+
+    // =========================================================
+    // SECTION C: EDGE PROCESSING (Curves, Radius, Length)
+    // =========================================================
+
     QList<TopoDS_Edge> selectedEdges;
     for (int i = 1; i <= aUniqueEdges.Extent(); ++i) {
         TopoDS_Edge anEdge = TopoDS::Edge(aUniqueEdges.FindKey(i));
         selectedEdges.append(anEdge);
 
-        // Length
+        // Linear Properties
         GProp_GProps aProps;
         BRepGProp::LinearProperties(anEdge, aProps);
         totalLength += aProps.Mass();
 
-        // --- CHECK CURVE / RADIUS / ANGLE ---
+        // Curve Properties (Radius/Angle)
         BRepAdaptor_Curve aCurve(anEdge);
         if (aCurve.GetType() == GeomAbs_Circle) {
             lastDiameter = 2.0 * aCurve.Circle().Radius();
 
             double startP = aCurve.FirstParameter();
             double endP = aCurve.LastParameter();
-            double angleRad = qAbs(endP - startP); // Use qAbs to be safe
+            double angleRad = qAbs(endP - startP);
 
             lastAngle = qRadiansToDegrees(angleRad);
+            // Normalize roughly to 360
             if (lastAngle > 359.9) lastAngle = 360.0;
         }
     }
 
-    // Fill Property Values
+    // Assign final calculated values to properties
     props.area = totalArea;
     props.length = totalLength;
     props.volume = totalVolume;
@@ -187,20 +232,25 @@ void MeasurementManager::calculateMeasurements()
         props.angle = lastAngle;
     }
 
-    // --- PATH VISUALIZATION VARIABLES ---
+    // =========================================================
+    // SECTION D: PATH GENERATION (Sorting Edges)
+    // =========================================================
+
     QList<TopoDS_Edge> orderedEdges;
 
-    // 5. SORT EDGES (Snake Path Logic)
     if (!selectedEdges.isEmpty()) {
         QList<TopoDS_Edge> pool = selectedEdges;
         orderedEdges.append(pool.takeFirst());
 
+        // Find the "end" of the first edge to start chaining
         gp_Pnt chainEnd;
         if (!pool.isEmpty()) {
             TopoDS_Vertex V1, V2;
             TopExp::Vertices(orderedEdges.first(), V1, V2);
             gp_Pnt P1 = BRep_Tool::Pnt(V1);
             gp_Pnt P2 = BRep_Tool::Pnt(V2);
+
+            // Check if P2 connects to anything in the pool
             bool p2Connects = false;
             for (const TopoDS_Edge& nextEdge : pool) {
                 TopoDS_Vertex nV1, nV2;
@@ -218,6 +268,7 @@ void MeasurementManager::calculateMeasurements()
             chainEnd = BRep_Tool::Pnt(V2);
         }
 
+        // Nearest Neighbor Sort
         while (!pool.isEmpty()) {
             int bestIndex = -1;
             double bestDist = 1e9;
@@ -238,8 +289,10 @@ void MeasurementManager::calculateMeasurements()
                 TopExp::Vertices(orderedEdges.last(), V1, V2);
                 gp_Pnt P1 = BRep_Tool::Pnt(V1);
                 gp_Pnt P2 = BRep_Tool::Pnt(V2);
+                // Update chain end to the point furthest from previous end
                 chainEnd = (chainEnd.Distance(P1) < chainEnd.Distance(P2)) ? P2 : P1;
             } else {
+                // If disjoint, just take the next one
                 orderedEdges.append(pool.takeFirst());
                 TopoDS_Vertex V1, V2;
                 TopExp::Vertices(orderedEdges.last(), V1, V2);
@@ -248,20 +301,28 @@ void MeasurementManager::calculateMeasurements()
         }
     }
 
-    // 6. GENERATE POINTS
+    // =========================================================
+    // SECTION E: POINT GENERATION & VISUALIZATION
+    // =========================================================
+
     int pointCounter = 1;
     gp_Pnt lastPos;
     bool isFirstEdge = true;
     gp_Pnt lastLabelPos;
     gp_Pnt firstLabelPos;
 
+    // Helper: Draw 3D Label
     auto drawLabel = [&](const gp_Pnt& p, int id) {
         gp_Pnt textPos = p;
         if (id == 1) firstLabelPos = p;
+
         bool isOverlapping = (id > 1 && p.Distance(lastLabelPos) < 0.1) ||
                              (id > 1 && p.Distance(firstLabelPos) < 0.1);
+
         Handle(AIS_TextLabel) aLabel = new AIS_TextLabel();
+
         if (isOverlapping) {
+            // Offset label if points crowd together (closed loop)
             gp_Vec offsetVec(0.0, 0.0, 0.5);
             textPos.Translate(offsetVec);
             TopoDS_Edge arrowLine = BRepBuilderAPI_MakeEdge(p, textPos);
@@ -274,16 +335,18 @@ void MeasurementManager::calculateMeasurements()
             textPos.SetZ(textPos.Z() + 0.05);
             aLabel->SetColor(Quantity_NOC_GREEN);
         }
+
         aLabel->SetText(TCollection_ExtendedString(QString("P%1").arg(id).toUtf8().constData()));
         aLabel->SetPosition(textPos);
         aLabel->SetHeight(14);
         aLabel->SetZLayer(Graphic3d_ZLayerId_Topmost);
+
         m_viewer->myContext->Display(aLabel, 0, 0, Standard_False);
         m_viewer->myPointLabels.append(aLabel);
         lastLabelPos = p;
     };
 
-    // ✅ UPDATED: Accepts optional Radius/Angle info
+    // Helper: Add Data to String
     auto addPointData = [&](const gp_Pnt& p, const QString& radAngInfo = "-") {
         int id = pointCounter++;
         QString distStr = "-";
@@ -291,7 +354,6 @@ void MeasurementManager::calculateMeasurements()
             double d = p.Distance(lastPos);
             distStr = QString::number(d, 'f', 2);
         }
-        // ✅ Appending 6th column: Rad/Ang
         pointTableData += QString("P%1|%2|%3|%4|%5|%6\n")
                               .arg(id)
                               .arg(p.X(), 0, 'f', 2)
@@ -303,21 +365,21 @@ void MeasurementManager::calculateMeasurements()
         lastPos = p;
     };
 
+    // Helper: Discretize Edge
     auto processEdge = [&](const TopoDS_Edge& edge, bool reverse) {
         BRepAdaptor_Curve adaptor(edge);
 
-        // ✅ NEW: Detect Curve Data
         QString edgeInfo = "-";
         if (adaptor.GetType() == GeomAbs_Circle) {
             double r = adaptor.Circle().Radius();
             double angleRad = qAbs(adaptor.LastParameter() - adaptor.FirstParameter());
             double angleDeg = qRadiansToDegrees(angleRad);
-            // Format: "R: 25.0 / A: 90.0°"
             edgeInfo = QString("R:%1 / A:%2°")
                            .arg(r, 0, 'f', 1)
                            .arg(angleDeg, 0, 'f', 1);
         }
 
+        // If not a straight line, discretize it
         if (adaptor.GetType() != GeomAbs_Line) {
             GCPnts_QuasiUniformDeflection discretizer(adaptor, 0.1);
             if (discretizer.IsDone()) {
@@ -330,22 +392,34 @@ void MeasurementManager::calculateMeasurements()
                 return;
             }
         }
+
+        // Straight line: just start and end
         TopoDS_Vertex V1, V2;
         TopExp::Vertices(edge, V1, V2);
         gp_Pnt P1 = BRep_Tool::Pnt(V1);
         gp_Pnt P2 = BRep_Tool::Pnt(V2);
-        if (reverse) { addPointData(P2, edgeInfo); addPointData(P1, edgeInfo); }
-        else { addPointData(P1, edgeInfo); addPointData(P2, edgeInfo); }
+
+        if (reverse) {
+            addPointData(P2, edgeInfo);
+            addPointData(P1, edgeInfo);
+        } else {
+            addPointData(P1, edgeInfo);
+            addPointData(P2, edgeInfo);
+        }
     };
 
+    // Process Sorted Edges
     for (const TopoDS_Edge& edge : std::as_const(orderedEdges)) {
         TopoDS_Vertex V1, V2;
         TopExp::Vertices(edge, V1, V2);
         if (V1.IsNull() || V2.IsNull()) continue;
+
         gp_Pnt P1 = BRep_Tool::Pnt(V1);
         gp_Pnt P2 = BRep_Tool::Pnt(V2);
+
         if (isFirstEdge) {
             bool flipFirst = false;
+            // Look ahead to determine orientation
             if (orderedEdges.size() > 1) {
                 TopoDS_Vertex nV1, nV2;
                 TopExp::Vertices(orderedEdges[1], nV1, nV2);
@@ -353,20 +427,25 @@ void MeasurementManager::calculateMeasurements()
                 gp_Pnt nP2 = BRep_Tool::Pnt(nV2);
                 double d1 = std::min(P1.Distance(nP1), P1.Distance(nP2));
                 double d2 = std::min(P2.Distance(nP1), P2.Distance(nP2));
-                if (d1 < d2) flipFirst = true;
+                if (d1 < d2) flipFirst = true; // P1 is closer to next edge, start from P2?
             }
             processEdge(edge, flipFirst);
             isFirstEdge = false;
         } else {
+            // Continuity check
             if (P1.Distance(lastPos) < P2.Distance(lastPos)) processEdge(edge, false);
             else processEdge(edge, true);
         }
     }
 
+    // =========================================================
+    // SECTION F: UPDATE & EMIT
+    // =========================================================
+
     m_viewer->myContext->UpdateCurrentViewer();
     emit m_viewer->measurementsUpdated(props, pointTableData);
-    
-    // Update internal struct just in case
+
+    // Cache internal data (optional, used by getMeasurementString)
     m_data.type = props.type;
     m_data.area = props.area;
     m_data.length = props.length;

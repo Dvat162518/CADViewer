@@ -7,7 +7,7 @@
 
 #include <QMainWindow>
 #include <QCloseEvent>
-#include "OcctQWidgetViewer.h"  // Requires ModelProperties struct definition
+#include "Core.h"  // Requires ModelProperties struct definition
 
 class QLabel;
 class QTableWidget;

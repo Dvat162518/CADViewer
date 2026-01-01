@@ -14,11 +14,11 @@ set(CMAKE_AUTOUIC ON)
 # Find Qt6
 # ============================================================
 find_package(Qt6 COMPONENTS
-    Core
-    Gui
-    OpenGL
-    OpenGLWidgets
-    REQUIRED
+Core
+Gui
+OpenGL
+OpenGLWidgets
+REQUIRED
 )
 
 # ============================================================
@@ -35,58 +35,60 @@ message(STATUS "OpenCASCADE libraries: ${OpenCASCADE_LIBRARIES}")
 # Source Files
 # ============================================================
 set(PROJECT_SOURCES
-    # Headers
-    include/OcctQMainWindowSample.h
-    include/OcctQWidgetViewer.h
-    include/OcctQtTools.h
-    include/OcctGlTools.h
+# Headers
+include/OcctQMainWindowSample.h
+include/OcctQWidgetViewer.h
+include/OcctQtTools.h
+include/OcctGlTools.h
 
-    # Source files
-    src/main.cpp
-    src/OcctQMainWindowSample.cpp
-    src/OcctQWidgetViewer.cpp
-    src/OcctQtTools.cpp
-    src/OcctGlTools.cpp
+# Source files
+src/main.cpp
+src/OcctQMainWindowSample.cpp
+src/OcctQWidgetViewer.cpp
+src/OcctQtTools.cpp
+src/OcctGlTools.cpp
 )
 
 # ============================================================
 # Create Executable
 # ============================================================
-add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
+add_executable(${PROJECT_NAME} ${PROJECT_SOURCES}
+
+)
 
 # ============================================================
 # Include Directories
 # ============================================================
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${OpenCASCADE_INCLUDE_DIR}
+${CMAKE_CURRENT_SOURCE_DIR}/include
+${OpenCASCADE_INCLUDE_DIR}
 )
 
 # ============================================================
 # Link Libraries
 # ============================================================
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::OpenGL
-    Qt6::OpenGLWidgets
-    ${OpenCASCADE_LIBRARIES}
+Qt6::Core
+Qt6::Gui
+Qt6::OpenGL
+Qt6::OpenGLWidgets
+${OpenCASCADE_LIBRARIES}
 )
 
 # ============================================================
 # Compiler Flags
 # ============================================================
 if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+target_compile_options(${PROJECT_NAME} PRIVATE /W4)
 else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # ============================================================
 # Output Directory
 # ============================================================
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # ============================================================
@@ -94,7 +96,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 # ============================================================
 # Enable OCCT features we need
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    OCCT_INCLUDE_DIR="${OpenCASCADE_INCLUDE_DIR}"
+OCCT_INCLUDE_DIR="${OpenCASCADE_INCLUDE_DIR}"
 )
 
 # ============================================================

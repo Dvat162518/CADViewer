@@ -329,8 +329,14 @@ void OcctQMainWindowSample::exportToCSV()
         return;
     }
 
+    // 1. Get File Name
     QString fileName = QFileDialog::getSaveFileName(this, "Save CSV", "", "CSV Files (*.csv)");
     if (fileName.isEmpty()) return;
+
+    // 2. FORCE Extension: Ensure it ends with .csv (Case insensitive check)
+    if (!fileName.endsWith(".csv", Qt::CaseInsensitive)) {
+        fileName += ".csv";
+    }
 
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -340,28 +346,51 @@ void OcctQMainWindowSample::exportToCSV()
 
     QTextStream out(&file);
 
-    // Write Header Info
-    out << "CAD Viewer Export - " << QDate::currentDate().toString() << "\n";
-    out << "Filename," << myLastProps.filename << "\n";
-    out << "Origin X," << myLastProps.originX << "\n";
-    out << "Origin Y," << myLastProps.originY << "\n";
-    out << "Origin Z," << myLastProps.originZ << "\n\n";
+    // 3. Helper Lambda: Sanitize fields for CSV
+    // Wraps text in quotes if it contains commas, newlines, or double quotes
+    auto csvEscape = [](const QString& val) -> QString {
+        QString temp = val;
+        // If data contains special characters, escape quotes and wrap in quotes
+        if (temp.contains(',') || temp.contains('"') || temp.contains('\n')) {
+            temp.replace("\"", "\"\""); // Escape existing quotes (e.g. 5" -> 5"")
+            return "\"" + temp + "\"";
+        }
+        return temp;
+    };
 
-    // Write Table Column Headers
-    out << "ID,X (mm),Y (mm),Z (mm),Distance (mm),Curve Data\n";
+    // 4. Write Header/Metadata Section
+    // Using a key-value pair format for the top section
+    out << "Report Property,Value\n";
+    out << "Date," << csvEscape(QDate::currentDate().toString(Qt::ISODate)) << "\n";
+    out << "Filename," << csvEscape(myLastProps.filename) << "\n";
+    out << "Origin X," << QString::number(myLastProps.originX, 'f', 6) << "\n";
+    out << "Origin Y," << QString::number(myLastProps.originY, 'f', 6) << "\n";
+    out << "Origin Z," << QString::number(myLastProps.originZ, 'f', 6) << "\n";
+    out << "\n"; // Blank line separator
 
-    // Write Data Rows
+    // 5. Write Data Table Headers
+    out << "ID,X,Y,Z,Distance,Curve Data\n";
+
+    // 6. Write Data Rows
     QStringList lines = myLastPointData.split('\n', Qt::SkipEmptyParts);
     for (const QString& line : lines) {
         QStringList cols = line.split('|');
         if (cols.size() < 6) continue;
-        // Replace pipe delimiter with commas for standard CSV format
-        out << cols.join(",") << "\n";
+
+        // Build the CSV row
+        QStringList outputRow;
+        for(const QString& col : cols) {
+            outputRow << csvEscape(col);
+        }
+
+        // Join with comma
+        out << outputRow.join(",") << "\n";
     }
 
     file.close();
-    statusBar()->showMessage("Exported to CSV successfully", 3000);
+    statusBar()->showMessage("Exported to CSV successfully: " + fileName, 3000);
 }
+
 
 void OcctQMainWindowSample::exportToPDF()
 {

@@ -50,6 +50,8 @@ private:
     QTableWidget* myPointsTable = nullptr;
     QTableWidget* mySelectionDataTable = nullptr;
     QCheckBox* mySelectionLockBox = nullptr;
+    QCheckBox* myOriginVisBox = nullptr;
+
 
     // --- NEW: Data Storage for Export ---
     QString myLastPointData;

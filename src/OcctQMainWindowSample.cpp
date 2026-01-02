@@ -190,6 +190,15 @@ void OcctQMainWindowSample::createDockWidgets()
     });
 
     toolsLayout->addWidget(mySelectionLockBox);
+
+    myOriginVisBox = new QCheckBox("Show Model Origin");
+    myOriginVisBox->setToolTip("Show/Hide the XYZ trihedron at the model center of mass");
+    myOriginVisBox->setChecked(true); // Default to on
+    connect(myOriginVisBox, &QCheckBox::toggled, this, [this](bool checked){
+        if(myViewer) myViewer->setOriginTrihedronVisible(checked);
+    });
+    toolsLayout->addWidget(myOriginVisBox);
+
     toolsLayout->addStretch(); // Push checkbox to top of this small area
 
     myDockTools->setWidget(toolsContainer);
@@ -222,6 +231,8 @@ void OcctQMainWindowSample::clearAllShapes()
 
     // Clear cached export data
     myLastPointData.clear();
+
+    if (myOriginVisBox) myOriginVisBox->setChecked(true);
 
     setWindowTitle("CAD Model Viewer");
 }

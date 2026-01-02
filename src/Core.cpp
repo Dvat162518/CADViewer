@@ -131,6 +131,8 @@ void OcctQWidgetViewer::clearAllShapes() { m_render->clearAllShapes(); }
 void OcctQWidgetViewer::fitViewToModel() { m_render->fitViewToModel(); }
 void OcctQWidgetViewer::displayOriginAxis() { m_render->displayOriginAxis(); }
 void OcctQWidgetViewer::meshShape(const TopoDS_Shape& s, double d) { m_render->meshShape(s, d); }
+void OcctQWidgetViewer::setOriginTrihedronVisible(bool theVisible){ m_render->setOriginTrihedronVisible(theVisible); }
+
 
 // --- NEW ---
 void OcctQWidgetViewer::displayModelOrigin(const gp_Pnt& p) { m_render->displayModelOrigin(p); }

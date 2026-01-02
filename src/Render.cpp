@@ -29,7 +29,7 @@
 #include <Message.hxx>
 
 RenderManager::RenderManager(OcctQWidgetViewer* viewer)
-    : m_viewer(viewer)
+    : m_viewer(viewer), myIsOriginVisible(true)
 {
 }
 
@@ -185,43 +185,73 @@ void RenderManager::displayOriginAxis()
     m_viewer->myContext->Display(aisZ, 0, 0, Standard_False);
 }
 
-// --- NEW: Display Trihedron at Model Origin ---
+// Render.cpp
+
 void RenderManager::displayModelOrigin(const gp_Pnt& thePnt)
 {
     if (m_viewer->myContext.IsNull()) return;
 
-    // 1. Remove old visual if exists
+    // --- OPTIMIZATION START ---
+    if (!myModelOriginVis.IsNull()) {
+        // Fix: Explicitly cast to AIS_Trihedron before calling Component()
+        // (Even if defined as AIS_Trihedron, this ensures safety and resolves ambiguity)
+        Handle(AIS_Trihedron) aTri = Handle(AIS_Trihedron)::DownCast(myModelOriginVis);
+
+        if (!aTri.IsNull()) {
+            // Retrieve the underlying geometry
+            Handle(Geom_Axis2Placement) currLoc = Handle(Geom_Axis2Placement)::DownCast(aTri->Component());
+
+            if (!currLoc.IsNull()) {
+                // Check if position matches (tolerance 0.0001)
+                if (currLoc->Location().IsEqual(thePnt, 1e-4)) {
+
+                    // State Management: Ensure visibility matches user preference
+                    if (myIsOriginVisible) {
+                        if (!m_viewer->myContext->IsDisplayed(myModelOriginVis))
+                            m_viewer->myContext->Display(myModelOriginVis, Standard_False);
+                    } else {
+                        if (m_viewer->myContext->IsDisplayed(myModelOriginVis))
+                            m_viewer->myContext->Erase(myModelOriginVis, Standard_False);
+                    }
+                    return; // EXIT EARLY: Visual exists and position is correct
+                }
+            }
+        }
+    }
+    // --- OPTIMIZATION END ---
+
+    // 1. Remove old visual if it exists (Position changed or new model)
     if (!myModelOriginVis.IsNull()) {
         m_viewer->myContext->Remove(myModelOriginVis, Standard_False);
         myModelOriginVis.Nullify();
     }
 
     // 2. Create Coordinate System at Point
-    // Z-axis defaults to (0,0,1), X-axis to (1,0,0) shifted to 'thePnt'
     Handle(Geom_Axis2Placement) aPlace = new Geom_Axis2Placement(thePnt, gp::DZ(), gp::DX());
-
-    // 3. Create Trihedron
     Handle(AIS_Trihedron) aTrihedron = new AIS_Trihedron(aPlace);
 
-    // 4. Style It
+    // 3. Style It
     aTrihedron->SetDatumDisplayMode(Prs3d_DM_WireFrame);
     aTrihedron->SetDrawArrows(true);
 
-    // Adjust visual attributes (Thicker lines, larger arrows)
     const Handle(Prs3d_Drawer)& aDrawer = aTrihedron->Attributes();
     aDrawer->DatumAspect()->SetAttribute(Prs3d_DA_XAxisLength, 20.0);
     aDrawer->DatumAspect()->SetAttribute(Prs3d_DA_YAxisLength, 20.0);
     aDrawer->DatumAspect()->SetAttribute(Prs3d_DA_ZAxisLength, 20.0);
-
-    // X=Red, Y=Green, Z=Blue is standard
     aDrawer->DatumAspect()->LineAspect(Prs3d_DP_XAxis)->SetColor(Quantity_NOC_RED);
     aDrawer->DatumAspect()->LineAspect(Prs3d_DP_YAxis)->SetColor(Quantity_NOC_GREEN);
     aDrawer->DatumAspect()->LineAspect(Prs3d_DP_ZAxis)->SetColor(Quantity_NOC_BLUE);
 
-    // 5. Display
-    m_viewer->myContext->Display(aTrihedron, 0, 0, Standard_False);
+    // 4. Update the internal handle
     myModelOriginVis = aTrihedron;
+
+    // 5. Display only if allowed
+    if (myIsOriginVisible) {
+        m_viewer->myContext->Display(myModelOriginVis, 0, 0, Standard_False);
+    }
 }
+
+
 // ----------------------------------------------
 
 void RenderManager::displayShape(const TopoDS_Shape& theShape)
@@ -344,4 +374,24 @@ void RenderManager::fitViewToModel()
     if (aBox.IsVoid()) return;
 
     m_viewer->myView->FitAll(0.01, false);
+}
+
+// Add this new function
+void RenderManager::setOriginTrihedronVisible(bool theVisible)
+{
+    myIsOriginVisible = theVisible; // <--- SAVE STATE
+
+    if (m_viewer->myContext.IsNull() || myModelOriginVis.IsNull()) return;
+
+    if (theVisible) {
+        if (!m_viewer->myContext->IsDisplayed(myModelOriginVis)) {
+            m_viewer->myContext->Display(myModelOriginVis, Standard_False);
+        }
+    } else {
+        if (m_viewer->myContext->IsDisplayed(myModelOriginVis)) {
+            m_viewer->myContext->Erase(myModelOriginVis, Standard_False);
+        }
+    }
+    m_viewer->myContext->UpdateCurrentViewer();
+    m_viewer->updateView();
 }

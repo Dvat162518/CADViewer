@@ -85,6 +85,8 @@ public:
     void calculateMeasurements();
     void displayOriginAxis();
     void displayModelOrigin(const gp_Pnt& thePnt);
+    void setOriginTrihedronVisible(bool theVisible);
+
 
     QString getFileFormatFromExtension(const QString& theFilePath) const;
     void displayShape(const TopoDS_Shape& theShape);

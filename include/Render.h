@@ -34,12 +34,16 @@ public:
     void updateView();
     void handleViewRedraw(const Handle(AIS_InteractiveContext)& theCtx,
                           const Handle(V3d_View)& theView);
+    void setOriginTrihedronVisible(bool theVisible);
+
 
 private:
     OcctQWidgetViewer* m_viewer;
 
     // Track the specific object to allow updating it
     Handle(AIS_InteractiveObject) myModelOriginVis;
+    bool myIsOriginVisible; // <--- ADD THIS
+
 };
 
 #endif // _Render_HeaderFile

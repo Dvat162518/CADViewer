@@ -79,7 +79,6 @@ void MeasurementManager::calculateMeasurements()
 
     // =========================================================
     // SECTION A: FILE METADATA & WHOLE MODEL ORIGIN
-    // (This runs regardless of selection)
     // =========================================================
 
     // A1. File Metadata
@@ -134,7 +133,6 @@ void MeasurementManager::calculateMeasurements()
 
     // =========================================================
     // SECTION B: SELECTION PROCESSING
-    // (Calculate specific metrics for selected items)
     // =========================================================
 
     double totalArea = 0.0;
@@ -189,12 +187,11 @@ void MeasurementManager::calculateMeasurements()
     if (!types.isEmpty()) {
         props.type = types.join("+");
     } else {
-        // If nothing selected, we show File Info + Origin
         props.type = "-";
     }
 
     // =========================================================
-    // SECTION C: EDGE PROCESSING (Curves, Radius, Length)
+    // SECTION C: EDGE PROCESSING
     // =========================================================
 
     QList<TopoDS_Edge> selectedEdges;
@@ -233,7 +230,7 @@ void MeasurementManager::calculateMeasurements()
     }
 
     // =========================================================
-    // SECTION D: PATH GENERATION (Sorting Edges)
+    // SECTION D: PATH SORTING
     // =========================================================
 
     QList<TopoDS_Edge> orderedEdges;
@@ -302,39 +299,51 @@ void MeasurementManager::calculateMeasurements()
     }
 
     // =========================================================
-    // SECTION E: POINT GENERATION & VISUALIZATION
+    // SECTION E: POINT GENERATION & VISUALIZATION (GREEN FIX)
     // =========================================================
 
     int pointCounter = 1;
     gp_Pnt lastPos;
     bool isFirstEdge = true;
-    gp_Pnt lastLabelPos;
-    gp_Pnt firstLabelPos;
+
+    QList<gp_Pnt> placedPoints;
 
     // Helper: Draw 3D Label
     auto drawLabel = [&](const gp_Pnt& p, int id) {
         gp_Pnt textPos = p;
-        if (id == 1) firstLabelPos = p;
 
-        bool isOverlapping = (id > 1 && p.Distance(lastLabelPos) < 0.1) ||
-                             (id > 1 && p.Distance(firstLabelPos) < 0.1);
+        // Check for collisions with ANY previous point
+        int overlapCount = 0;
+        for (const gp_Pnt& prevP : placedPoints) {
+            if (p.Distance(prevP) < 0.1) {
+                overlapCount++;
+            }
+        }
+        placedPoints.append(p);
+
+        bool isOverlapping = (overlapCount > 0);
 
         Handle(AIS_TextLabel) aLabel = new AIS_TextLabel();
 
         if (isOverlapping) {
-            // Offset label if points crowd together (closed loop)
-            gp_Vec offsetVec(0.0, 0.0, 0.5);
+            // Calculate stacking offset based on how many overlaps found
+            gp_Vec offsetVec(0.0, 0.0, 0.5 * overlapCount);
             textPos.Translate(offsetVec);
+
+            // Draw Leader Line (Yellow)
             TopoDS_Edge arrowLine = BRepBuilderAPI_MakeEdge(p, textPos);
             Handle(AIS_Shape) lineShape = new AIS_Shape(arrowLine);
             lineShape->SetColor(Quantity_NOC_YELLOW);
             m_viewer->myContext->Display(lineShape, 0, 0, Standard_False);
             m_viewer->myPointLabels.append(lineShape);
-            aLabel->SetColor(Quantity_NOC_YELLOW);
         } else {
+            // Slight Z lift for visibility
             textPos.SetZ(textPos.Z() + 0.05);
-            aLabel->SetColor(Quantity_NOC_GREEN);
         }
+
+        // --- FIX: TEXT IS ALWAYS GREEN ---
+        aLabel->SetColor(Quantity_NOC_GREEN);
+        // ---------------------------------
 
         aLabel->SetText(TCollection_ExtendedString(QString("P%1").arg(id).toUtf8().constData()));
         aLabel->SetPosition(textPos);
@@ -343,7 +352,6 @@ void MeasurementManager::calculateMeasurements()
 
         m_viewer->myContext->Display(aLabel, 0, 0, Standard_False);
         m_viewer->myPointLabels.append(aLabel);
-        lastLabelPos = p;
     };
 
     // Helper: Add Data to String
@@ -381,7 +389,10 @@ void MeasurementManager::calculateMeasurements()
 
         // If not a straight line, discretize it
         if (adaptor.GetType() != GeomAbs_Line) {
-            GCPnts_QuasiUniformDeflection discretizer(adaptor, 0.1);
+            // --- TWEAK: Changed deflection from 0.1 to 0.005 ---
+            // A smaller value creates a much denser point cloud along the curve
+            GCPnts_QuasiUniformDeflection discretizer(adaptor, 0.005);
+
             if (discretizer.IsDone()) {
                 int nPoints = discretizer.NbPoints();
                 if (reverse) {
@@ -393,7 +404,7 @@ void MeasurementManager::calculateMeasurements()
             }
         }
 
-        // Straight line: just start and end
+        // Straight line: just start and end (No change needed here)
         TopoDS_Vertex V1, V2;
         TopExp::Vertices(edge, V1, V2);
         gp_Pnt P1 = BRep_Tool::Pnt(V1);
@@ -427,7 +438,7 @@ void MeasurementManager::calculateMeasurements()
                 gp_Pnt nP2 = BRep_Tool::Pnt(nV2);
                 double d1 = std::min(P1.Distance(nP1), P1.Distance(nP2));
                 double d2 = std::min(P2.Distance(nP1), P2.Distance(nP2));
-                if (d1 < d2) flipFirst = true; // P1 is closer to next edge, start from P2?
+                if (d1 < d2) flipFirst = true;
             }
             processEdge(edge, flipFirst);
             isFirstEdge = false;
@@ -445,7 +456,7 @@ void MeasurementManager::calculateMeasurements()
     m_viewer->myContext->UpdateCurrentViewer();
     emit m_viewer->measurementsUpdated(props, pointTableData);
 
-    // Cache internal data (optional, used by getMeasurementString)
+    // Cache internal data
     m_data.type = props.type;
     m_data.area = props.area;
     m_data.length = props.length;

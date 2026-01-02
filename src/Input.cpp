@@ -23,16 +23,16 @@ InputManager::InputManager(OcctQWidgetViewer* viewer)
 
 void InputManager::keyPressEvent(QKeyEvent* theEvent)
 {
-    if (m_viewer->myView.IsNull()) {
-        return;
-    }
+    if (m_viewer->myView.IsNull()) return;
 
     const Aspect_VKey aKey = OcctQtTools::qtKey2VKey(theEvent->key());
 
     switch (aKey) {
     case Aspect_VKey_Escape:
-        // Clear selection on Escape, but keep model data
-        m_viewer->clearAllShapes(); // Or just ClearSelected if you prefer
+        // Only clear if NOT locked
+        if (!m_viewer->isSelectionLocked()) {
+            m_viewer->clearAllShapes();
+        }
         return;
 
     case Aspect_VKey_F:
@@ -76,7 +76,6 @@ void InputManager::mouseMoveEvent(QMouseEvent* theEvent)
     }
 }
 
-
 void InputManager::mousePressEvent(QMouseEvent* theEvent)
 {
     m_viewer->QWidget::mousePressEvent(theEvent);
@@ -103,48 +102,58 @@ void InputManager::mousePressEvent(QMouseEvent* theEvent)
         // 2. Handle Left Click (Selection)
         if (theEvent->button() == Qt::LeftButton) {
 
-            // CASE A: User clicked on a Shape or ViewCube
-            if (m_viewer->myContext->HasDetected()) {
-                Handle(AIS_InteractiveObject) aDetected = m_viewer->myContext->DetectedInteractive();
+            bool isCtrlPressed = theEvent->modifiers() & Qt::ControlModifier;
+            bool isLocked = m_viewer->isSelectionLocked();
 
-                // ViewCube Logic
-                if (!aDetected.IsNull() && aDetected == m_viewer->myViewCube) {
-                    m_viewer->myContext->SelectDetected(AIS_SelectionScheme_Replace);
+            // Logic:
+            // 1. If NOT locked -> Normal selection behavior.
+            // 2. If Locked BUT Ctrl is pressed -> Allow adding/toggling (XOR).
+            // 3. If Locked AND No Ctrl -> Do nothing (Preserve selection).
+            bool allowSelectionChange = (!isLocked) || (isLocked && isCtrlPressed);
+
+            if (allowSelectionChange) {
+
+                // CASE A: User clicked on a Shape or ViewCube
+                if (m_viewer->myContext->HasDetected()) {
+                    Handle(AIS_InteractiveObject) aDetected = m_viewer->myContext->DetectedInteractive();
+
+                    if (!aDetected.IsNull() && aDetected == m_viewer->myViewCube) {
+                        m_viewer->myContext->SelectDetected(AIS_SelectionScheme_Replace);
+                        m_viewer->myContext->UpdateCurrentViewer();
+                        m_viewer->updateView();
+                        return;
+                    }
+
+                    // Normal Shape Selection
+                    // If Ctrl is pressed (or we are allowed to change), use XOR
+                    if (isCtrlPressed) {
+                        m_viewer->myContext->SelectDetected(AIS_SelectionScheme_XOR);
+                    } else {
+                        m_viewer->myContext->SelectDetected(AIS_SelectionScheme_Replace);
+                    }
+
                     m_viewer->myContext->UpdateCurrentViewer();
-                    m_viewer->updateView();
-                    return;
+                    m_viewer->calculateMeasurements();
                 }
-
-                // Normal Shape Selection
-                if (theEvent->modifiers() & Qt::ControlModifier) {
-                    m_viewer->myContext->SelectDetected(AIS_SelectionScheme_XOR);
-                } else {
-                    m_viewer->myContext->SelectDetected(AIS_SelectionScheme_Replace);
-                }
-
-                m_viewer->myContext->UpdateCurrentViewer();
-
-                // Recalculate based on specific selection
-                m_viewer->calculateMeasurements();
-            }
-            // CASE B: User clicked on Empty Space (Deselect)
-            else {
-                m_viewer->myContext->ClearSelected(Standard_False);
-                m_viewer->clearLabels();
-                m_viewer->myContext->UpdateCurrentViewer();
-
-                // --- FIX: Recalculate instead of sending empty props ---
-                // This ensures Filename, Size, and Origin remain visible
-                // even when nothing is selected.
-                m_viewer->calculateMeasurements();
-                // -----------------------------------------------------
-
-                if (OcctQtTools::qtHandleMouseEvent(*m_viewer, m_viewer->myView, theEvent)) {
-                    m_viewer->updateView();
+                // CASE B: User clicked on Empty Space
+                else {
+                    // Only deselect if strictly NOT locked.
+                    // Even if Ctrl is pressed, clicking empty space usually deselects nothing
+                    // or everything depending on UX, but "Lock" implies protection.
+                    // So we only clear if !Locked.
+                    if (!isLocked) {
+                        m_viewer->myContext->ClearSelected(Standard_False);
+                        m_viewer->clearLabels();
+                        m_viewer->myContext->UpdateCurrentViewer();
+                        m_viewer->calculateMeasurements();
+                    }
                 }
             }
 
-            m_viewer->updateView();
+            // Always pass event to tools (for rotation/panning if needed)
+            if (OcctQtTools::qtHandleMouseEvent(*m_viewer, m_viewer->myView, theEvent)) {
+                m_viewer->updateView();
+            }
         }
 
     } catch (const Standard_Failure& e) {
@@ -152,13 +161,10 @@ void InputManager::mousePressEvent(QMouseEvent* theEvent)
     }
 }
 
-
 void InputManager::mouseReleaseEvent(QMouseEvent* theEvent)
 {
     m_viewer->QWidget::mouseReleaseEvent(theEvent);
-    if (m_viewer->myView.IsNull()) {
-        return;
-    }
+    if (m_viewer->myView.IsNull()) return;
 
     theEvent->accept();
     if (OcctQtTools::qtHandleMouseEvent(*m_viewer, m_viewer->myView, theEvent)) {
@@ -169,9 +175,7 @@ void InputManager::mouseReleaseEvent(QMouseEvent* theEvent)
 void InputManager::wheelEvent(QWheelEvent* theEvent)
 {
     m_viewer->QWidget::wheelEvent(theEvent);
-    if (m_viewer->myView.IsNull()) {
-        return;
-    }
+    if (m_viewer->myView.IsNull()) return;
 
     theEvent->accept();
     if (OcctQtTools::qtHandleWheelEvent(*m_viewer, m_viewer->myView, theEvent)) {

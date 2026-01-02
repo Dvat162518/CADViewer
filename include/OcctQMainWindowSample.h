@@ -1,57 +1,51 @@
-// Copyright (c) 2025 Open CASCADE
-// CAD Viewer Application - Main Window Header
-// Optimized: Consistent naming, includes, comments; no functional changes
-
+// OcctQMainWindowSample.h
 #ifndef _OcctQMainWindowSample_HeaderFile
 #define _OcctQMainWindowSample_HeaderFile
 
 #include <QMainWindow>
 #include <QCloseEvent>
-#include "Core.h"  // Requires ModelProperties struct definition
+#include "Core.h"
 
 class QLabel;
 class QTableWidget;
+class QCheckBox;
+class QDockWidget; // Forward declaration
 
 class OcctQMainWindowSample : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    /// Constructor - Initializes UI and connects viewer signals
     OcctQMainWindowSample();
-
-    /// Destructor - No special cleanup needed
     virtual ~OcctQMainWindowSample();
 
 protected:
-    /// Handles window close event
     virtual void closeEvent(QCloseEvent* theEvent) override;
 
 private slots:
-    /// Updates properties and points tables from viewer measurements
     void onMeasurementsUpdated(const ModelProperties& props, const QString& pointData);
 
 private:
-    /// Creates menu bar with File/View/Help actions
     void createMenuBar();
-
-    /// Adds overlay control layout (background slider, about) on viewer
     void createLayoutOverViewer();
-
-    /// Creates right dock with Properties/Path Data tabs
     void createDockWidgets();
-
-    /// Opens file dialog and loads CAD model into viewer
     void loadCADModel();
-
-    /// Clears all shapes from viewer and resets UI tables
     void clearAllShapes();
 
     // Member widgets
-    OcctQWidgetViewer* myViewer = nullptr;      ///< Central 3D viewer widget
-    QLabel* myStatusLabel = nullptr;            ///< Status bar label (unused in current impl)
-    QTableWidget* myPropertiesTable = nullptr;  ///< Table for model/selection properties
-    QTableWidget* myPointsTable = nullptr;      ///< Table for path/measurement points data
+    OcctQWidgetViewer* myViewer = nullptr;
+    QLabel* myStatusLabel = nullptr;
+
+    // --- NEW: Separate Dock Widgets ---
+    QDockWidget* myDockDescription = nullptr;
+    QDockWidget* myDockModelData = nullptr;
+    QDockWidget* myDockTools = nullptr;
+    // ----------------------------------
+
+    QTableWidget* myPropertiesTable = nullptr;   // Inside Description Dock
+    QTableWidget* myPointsTable = nullptr;       // Inside Description Dock
+    QTableWidget* mySelectionDataTable = nullptr; // Inside Model Data Dock
+    QCheckBox* mySelectionLockBox = nullptr;     // Inside Tools Dock
 };
 
 #endif  // _OcctQMainWindowSample_HeaderFile

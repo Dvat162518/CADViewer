@@ -22,6 +22,7 @@
 #include <QProgressDialog>
 #include <QKeySequence>
 #include <QHeaderView>
+#include <QCheckBox>
 
 OcctQMainWindowSample::OcctQMainWindowSample()
 {
@@ -33,9 +34,9 @@ OcctQMainWindowSample::OcctQMainWindowSample()
     setCentralWidget(myViewer);
 
     // Build UI components
+    createDockWidgets(); // Create docks first so menu can reference them
     createMenuBar();
     createLayoutOverViewer();
-    createDockWidgets();
 
     // Connect viewer signals
     connect(myViewer, &OcctQWidgetViewer::modelLoaded, this,
@@ -91,6 +92,15 @@ void OcctQMainWindowSample::createMenuBar()
         if (myViewer) myViewer->fitViewToModel();
     });
     aViewMenu->addAction(aFitAction);
+
+    // --- NEW: WINDOWS MENU ---
+    QMenu* aWindowMenu = menuBar()->addMenu("&Windows");
+
+    // Use the built-in toggle actions provided by QDockWidget
+    if (myDockDescription) aWindowMenu->addAction(myDockDescription->toggleViewAction());
+    if (myDockModelData)   aWindowMenu->addAction(myDockModelData->toggleViewAction());
+    if (myDockTools)       aWindowMenu->addAction(myDockTools->toggleViewAction());
+    // -------------------------
 }
 
 void OcctQMainWindowSample::createLayoutOverViewer()
@@ -99,35 +109,97 @@ void OcctQMainWindowSample::createLayoutOverViewer()
 
 void OcctQMainWindowSample::createDockWidgets()
 {
-    QDockWidget* aDock = new QDockWidget("Data", this);
-    aDock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
+    // Common settings for all docks
+    auto setupDock = [this](QDockWidget* dock) {
+        dock->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
+        dock->setFeatures(QDockWidget::DockWidgetMovable |
+                          QDockWidget::DockWidgetFloatable |
+                          QDockWidget::DockWidgetClosable);
+    };
+
+    // =========================================================
+    // 1. DOCK: DESCRIPTION (Top)
+    // =========================================================
+    myDockDescription = new QDockWidget("Description", this);
+    setupDock(myDockDescription);
 
     QTabWidget* aTabWidget = new QTabWidget();
 
-    // --- Tab 1: Properties ---
+    // Tab 1: File Info
     myPropertiesTable = new QTableWidget();
     myPropertiesTable->setColumnCount(2);
     myPropertiesTable->setHorizontalHeaderLabels(QStringList() << "Property" << "Value");
     myPropertiesTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     myPropertiesTable->verticalHeader()->setVisible(false);
-    aTabWidget->addTab(myPropertiesTable, "Properties");
+    aTabWidget->addTab(myPropertiesTable, "Info");
 
-    // --- Tab 2: Points / Path ---
+    // Tab 2: Path Data
     myPointsTable = new QTableWidget();
     myPointsTable->setColumnCount(6);
-    // Columns: ID | X | Y | Z | Dist | Rad/Ang
     myPointsTable->setHorizontalHeaderLabels(QStringList() << "ID" << "X" << "Y" << "Z" << "Dist" << "Data");
     myPointsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     aTabWidget->addTab(myPointsTable, "Path Data");
 
-    aDock->setWidget(aTabWidget);
-    addDockWidget(Qt::RightDockWidgetArea, aDock);
+    myDockDescription->setWidget(aTabWidget);
+    addDockWidget(Qt::RightDockWidgetArea, myDockDescription);
+
+
+    // =========================================================
+    // 2. DOCK: MODEL / SELECTION DATA (Middle)
+    // =========================================================
+    myDockModelData = new QDockWidget("Model / Selection Data", this);
+    setupDock(myDockModelData);
+
+    mySelectionDataTable = new QTableWidget();
+    mySelectionDataTable->setColumnCount(2);
+    mySelectionDataTable->setHorizontalHeaderLabels(QStringList() << "Metric" << "Value");
+    mySelectionDataTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    mySelectionDataTable->verticalHeader()->setVisible(false);
+    mySelectionDataTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    myDockModelData->setWidget(mySelectionDataTable);
+    addDockWidget(Qt::RightDockWidgetArea, myDockModelData);
+
+
+    // =========================================================
+    // 3. DOCK: CAD TOOLS (Bottom)
+    // =========================================================
+    myDockTools = new QDockWidget("CAD Tools", this);
+    setupDock(myDockTools);
+
+    QWidget* toolsContainer = new QWidget();
+    QVBoxLayout* toolsLayout = new QVBoxLayout(toolsContainer);
+    toolsLayout->setContentsMargins(5, 5, 5, 5);
+
+    mySelectionLockBox = new QCheckBox("Lock Selection");
+    mySelectionLockBox->setToolTip("Prevents clearing selection. Hold CTRL to add to selection while locked.");
+
+    connect(mySelectionLockBox, &QCheckBox::toggled, this, [this](bool checked){
+        if(myViewer) myViewer->setSelectionLocked(checked);
+    });
+
+    toolsLayout->addWidget(mySelectionLockBox);
+    toolsLayout->addStretch(); // Push checkbox to top of this small area
+
+    myDockTools->setWidget(toolsContainer);
+    addDockWidget(Qt::RightDockWidgetArea, myDockTools);
+
+    // =========================================================
+    // INITIAL DOCK SIZING & ORDER
+    // =========================================================
+    // Ensure they are vertically stacked in the order we added them
+    // Note: Qt logic for "tabifying" vs "splitting" can be tricky.
+    // Calling addDockWidget repeatedly usually stacks them.
+
+    // Optional: Force a resize to give the Table more space than the Tools
+    resizeDocks({myDockDescription, myDockModelData, myDockTools},
+                {300, 300, 80}, Qt::Vertical);
 }
 
 void OcctQMainWindowSample::loadCADModel()
 {
     QString aFileName = QFileDialog::getOpenFileName(this, "Open CAD File", "",
-                                                     "CAD Files (*.step *.stp *.iges *.igs *.brep *.STEP *.IGES *.IGS *.BREP *.STP)");
+                                                     "CAD Files (*.step *.stp *.iges *.igs *.brep)");
     if (!aFileName.isEmpty()) {
         QApplication::setOverrideCursor(Qt::WaitCursor);
         myViewer->loadCADModel(aFileName);
@@ -139,46 +211,52 @@ void OcctQMainWindowSample::clearAllShapes()
 {
     myViewer->clearAllShapes();
     myPropertiesTable->setRowCount(0);
+    mySelectionDataTable->setRowCount(0);
     myPointsTable->setRowCount(0);
     setWindowTitle("CAD Model Viewer");
 }
 
 void OcctQMainWindowSample::onMeasurementsUpdated(const ModelProperties& props, const QString& pointData)
 {
-    // 1. Update Properties Table
-    myPropertiesTable->setRowCount(0);
-    auto addRow = [this](const QString& name, const QString& val) {
+    // Helper Lambda
+    auto addRow = [](QTableWidget* table, const QString& name, const QString& val) {
         if (val.isEmpty() || val == "0" || val == "0.00") return;
-        int row = myPropertiesTable->rowCount();
-        myPropertiesTable->insertRow(row);
-        myPropertiesTable->setItem(row, 0, new QTableWidgetItem(name));
-        myPropertiesTable->setItem(row, 1, new QTableWidgetItem(val));
+        int row = table->rowCount();
+        table->insertRow(row);
+        table->setItem(row, 0, new QTableWidgetItem(name));
+        table->setItem(row, 1, new QTableWidgetItem(val));
     };
 
-    addRow("Filename", props.filename);
-    addRow("Location", props.location);
-    addRow("Size", props.size);
-    addRow("Type", props.type);
+    // 1. Update Description (Top Dock)
+    myPropertiesTable->setRowCount(0);
+    addRow(myPropertiesTable, "Filename", props.filename);
+    addRow(myPropertiesTable, "Location", props.location);
+    addRow(myPropertiesTable, "Size", props.size);
 
-    // --- NEW: DISPLAY ORIGIN ---
+    // 2. Update Model Data (Middle Dock)
+    mySelectionDataTable->setRowCount(0);
+
+    // --- FIX: ORIGIN FIRST ---
     QString origX = QString::number(props.originX, 'f', 2);
     QString origY = QString::number(props.originY, 'f', 2);
     QString origZ = QString::number(props.originZ, 'f', 2);
 
-    addRow("Origin X", origX);
-    addRow("Origin Y", origY);
-    addRow("Origin Z", origZ);
-    // ---------------------------
+    addRow(mySelectionDataTable, "Origin X", origX);
+    addRow(mySelectionDataTable, "Origin Y", origY);
+    addRow(mySelectionDataTable, "Origin Z", origZ);
+    // -------------------------
 
-    if (props.area > 0) addRow("Area", QString::number(props.area, 'f', 2) + " mm²");
-    if (props.volume > 0) addRow("Volume", QString::number(props.volume, 'f', 2) + " mm³");
-    if (props.length > 0) addRow("Length", QString::number(props.length, 'f', 2) + " mm");
-    if (props.diameter > 0) addRow("Diameter", QString::number(props.diameter, 'f', 2) + " mm");
-    if (props.radius > 0) addRow("Radius", QString::number(props.radius, 'f', 2) + " mm");
-    if (props.angle > 0) addRow("Angle", QString::number(props.angle, 'f', 2) + " deg");
+    addRow(mySelectionDataTable, "Selection Type", props.type);
+
+    if (props.area > 0) addRow(mySelectionDataTable, "Area", QString::number(props.area, 'f', 2) + " mm²");
+    if (props.volume > 0) addRow(mySelectionDataTable, "Volume", QString::number(props.volume, 'f', 2) + " mm³");
+    if (props.length > 0) addRow(mySelectionDataTable, "Length", QString::number(props.length, 'f', 2) + " mm");
+    if (props.diameter > 0) addRow(mySelectionDataTable, "Diameter", QString::number(props.diameter, 'f', 2) + " mm");
+    if (props.radius > 0) addRow(mySelectionDataTable, "Radius", QString::number(props.radius, 'f', 2) + " mm");
+    if (props.angle > 0) addRow(mySelectionDataTable, "Angle", QString::number(props.angle, 'f', 2) + " deg");
 
 
-    // 2. Update Points Table
+    // 3. Update Path Data (Top Dock, Tab 2)
     myPointsTable->setRowCount(0);
     if (pointData.isEmpty()) return;
 
@@ -202,12 +280,11 @@ void OcctQMainWindowSample::onMeasurementsUpdated(const ModelProperties& props, 
         myPointsTable->setItem(row, 5, new QTableWidgetItem(cols[5]));  // Rad/Ang
     }
 
-    // Apply spans for paired rows
+    // Apply spans
     int totalRows = myPointsTable->rowCount();
     for (int i = 1; i < totalRows; i += 2) {
         if (i >= totalRows) break;
 
-        // Merge Dist col
         QTableWidgetItem* distItem = myPointsTable->item(i, 4);
         if (distItem && distItem->text() != "-" && !distItem->text().isEmpty()) {
             QTableWidgetItem* prevDist = myPointsTable->item(i - 1, 4);
@@ -219,7 +296,6 @@ void OcctQMainWindowSample::onMeasurementsUpdated(const ModelProperties& props, 
             }
         }
 
-        // Merge Data col
         QTableWidgetItem* dataItem = myPointsTable->item(i, 5);
         if (dataItem && dataItem->text() != "-") {
             QTableWidgetItem* prevData = myPointsTable->item(i - 1, 5);

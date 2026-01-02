@@ -84,10 +84,7 @@ public:
     void fitViewToModel();
     void calculateMeasurements();
     void displayOriginAxis();
-
-    // --- NEW ---
     void displayModelOrigin(const gp_Pnt& thePnt);
-    // -----------
 
     QString getFileFormatFromExtension(const QString& theFilePath) const;
     void displayShape(const TopoDS_Shape& theShape);
@@ -95,6 +92,11 @@ public:
 
     MeasurementData getMeasurements() const;
     QString getMeasurementString() const;
+
+    // --- NEW: Selection Lock Methods ---
+    void setSelectionLocked(bool theLocked) { myIsSelectionLocked = theLocked; }
+    bool isSelectionLocked() const { return myIsSelectionLocked; }
+    // -----------------------------------
 
     virtual QSize minimumSizeHint() const override { return QSize(200, 200); }
     virtual QSize sizeHint() const override { return QSize(720, 480); }
@@ -158,6 +160,9 @@ private:
     QString myGlInfo;
     bool myHasTouchInput = false;
     bool myIsCoreProfile = true;
+
+    // --- NEW: State Variable ---
+    bool myIsSelectionLocked = false;
 };
 
 #endif // _Core_HeaderFile

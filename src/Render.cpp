@@ -281,35 +281,48 @@ void RenderManager::clearAllShapes()
     if (m_viewer->myContext.IsNull()) return;
 
     try {
+        // 1. Deselect everything first
         m_viewer->myContext->ClearSelected(Standard_False);
 
+        // 2. Remove all displayed shapes safely
         for (const Handle(AIS_Shape)& aShape : m_viewer->myDisplayedShapes) {
             if (!aShape.IsNull() && m_viewer->myContext->IsDisplayed(aShape)) {
                 m_viewer->myContext->Remove(aShape, Standard_False);
             }
         }
 
-        // --- NEW: Clear the origin visual as well ---
+        // 3. Remove the Origin Visual
         if (!myModelOriginVis.IsNull()) {
             m_viewer->myContext->Remove(myModelOriginVis, Standard_False);
             myModelOriginVis.Nullify();
         }
 
+        // 4. Reset Data Structures
         m_viewer->myDisplayedShapes.clear();
         m_viewer->myLoadedShape.Nullify();
         m_viewer->myCADDocument.Nullify();
 
+        // --- FIX: CLEAR FILE PATH ---
+        m_viewer->myCurrentFilePath.clear();
+        // ----------------------------
+
+        // 5. Ensure ViewCube stays
         if (!m_viewer->myViewCube.IsNull()) {
             if (!m_viewer->myContext->IsDisplayed(m_viewer->myViewCube)) {
                 m_viewer->myContext->Display(m_viewer->myViewCube, 0, 0, Standard_False);
             }
         }
 
+        // 6. Force update and reset maps
         m_viewer->myContext->UpdateCurrentViewer();
         m_viewer->myFaceMap.Clear();
         m_viewer->myEdgeMap.Clear();
 
-        Message::SendInfo() << "Shapes cleared successfully";
+        // --- FIX: RESET MEASUREMENTS TO EMPTY ---
+        m_viewer->calculateMeasurements();
+        // ----------------------------------------
+
+        Message::SendInfo() << "Shapes and data cleared successfully";
 
     } catch (const Standard_Failure& e) {
         Message::SendWarning() << "Error in clearAllShapes: " << e.GetMessageString();

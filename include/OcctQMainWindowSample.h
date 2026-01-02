@@ -1,15 +1,16 @@
 // OcctQMainWindowSample.h
+
 #ifndef _OcctQMainWindowSample_HeaderFile
 #define _OcctQMainWindowSample_HeaderFile
 
 #include <QMainWindow>
-#include <QCloseEvent>
+#include <QTableWidget>
+#include <QDockWidget>
+#include <QLabel>
+#include <QCheckBox>
+#include <QFileDialog>
+#include <QMessageBox>
 #include "Core.h"
-
-class QLabel;
-class QTableWidget;
-class QCheckBox;
-class QDockWidget; // Forward declaration
 
 class OcctQMainWindowSample : public QMainWindow
 {
@@ -25,6 +26,11 @@ protected:
 private slots:
     void onMeasurementsUpdated(const ModelProperties& props, const QString& pointData);
 
+    // --- NEW: Export Slots ---
+    void exportToCSV();
+    void exportToPDF();
+    // -------------------------
+
 private:
     void createMenuBar();
     void createLayoutOverViewer();
@@ -36,16 +42,19 @@ private:
     OcctQWidgetViewer* myViewer = nullptr;
     QLabel* myStatusLabel = nullptr;
 
-    // --- NEW: Separate Dock Widgets ---
     QDockWidget* myDockDescription = nullptr;
     QDockWidget* myDockModelData = nullptr;
     QDockWidget* myDockTools = nullptr;
-    // ----------------------------------
 
-    QTableWidget* myPropertiesTable = nullptr;   // Inside Description Dock
-    QTableWidget* myPointsTable = nullptr;       // Inside Description Dock
-    QTableWidget* mySelectionDataTable = nullptr; // Inside Model Data Dock
-    QCheckBox* mySelectionLockBox = nullptr;     // Inside Tools Dock
+    QTableWidget* myPropertiesTable = nullptr;
+    QTableWidget* myPointsTable = nullptr;
+    QTableWidget* mySelectionDataTable = nullptr;
+    QCheckBox* mySelectionLockBox = nullptr;
+
+    // --- NEW: Data Storage for Export ---
+    QString myLastPointData;
+    ModelProperties myLastProps;
+    // ------------------------------------
 };
 
-#endif  // _OcctQMainWindowSample_HeaderFile
+#endif // _OcctQMainWindowSample_HeaderFile

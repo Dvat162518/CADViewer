@@ -11,7 +11,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # ============================================================
-# Find Qt6
+# Find Qt6 (Added PrintSupport)
 # ============================================================
 find_package(Qt6 COMPONENTS
     Core
@@ -19,17 +19,16 @@ find_package(Qt6 COMPONENTS
     Widgets
     OpenGL
     OpenGLWidgets
+    PrintSupport
     REQUIRED
 )
 
 # ============================================================
 # Find OpenCASCADE (OCCT)
 # ============================================================
-# Preserved from parent CMake: Explicit path for OCCT
 set(OpenCASCADE_DIR "/opt/occt-7.7/lib/cmake/opencascade")
 find_package(OpenCASCADE REQUIRED)
 
-# Print OCCT information for verification
 message(STATUS "OpenCASCADE found: ${OpenCASCADE_FOUND}")
 message(STATUS "OpenCASCADE libraries: ${OpenCASCADE_LIBRARIES}")
 
@@ -37,9 +36,8 @@ message(STATUS "OpenCASCADE libraries: ${OpenCASCADE_LIBRARIES}")
 # Source Files
 # ============================================================
 set(PROJECT_SOURCES
-    # Headers
     include/OcctQMainWindowSample.h
-    include/Core.h              # Renamed from OcctQWidgetViewer.h
+    include/Core.h
     include/CadModel.h
     include/Render.h
     include/Measurement.h
@@ -47,11 +45,9 @@ set(PROJECT_SOURCES
     include/Event.h
     include/OcctQtTools.h
     include/OcctGlTools.h
-
-    # Source files
     src/main.cpp
     src/OcctQMainWindowSample.cpp
-    src/Core.cpp            # Renamed from OcctQWidgetViewer.cpp
+    src/Core.cpp
     src/CadModel.cpp
     src/Render.cpp
     src/Measurement.cpp
@@ -67,7 +63,7 @@ set(PROJECT_SOURCES
 add_executable(${PROJECT_NAME} ${PROJECT_SOURCES})
 
 # ============================================================
-# Link Libraries
+# Link Libraries (Added PrintSupport)
 # ============================================================
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
@@ -75,6 +71,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::OpenGL
     Qt6::OpenGLWidgets
+    Qt6::PrintSupport
     ${OpenCASCADE_LIBRARIES}
 )
 
@@ -87,7 +84,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 # ============================================================
-# Compiler Options (Preserved from parent)
+# Compiler Options
 # ============================================================
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /W4)
@@ -96,32 +93,15 @@ else()
 endif()
 
 # ============================================================
-# Output Directory (Preserved from parent)
+# Output Directory
 # ============================================================
 set_target_properties(${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 # ============================================================
-# OCCT-specific Settings (Preserved from parent)
+# OCCT-specific Settings
 # ============================================================
-# Enable OCCT features we need
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     OCCT_INCLUDE_DIR="${OpenCASCADE_INCLUDE_DIR}"
 )
-
-# ============================================================
-# Build Information
-# ============================================================
-message(STATUS "")
-message(STATUS "========== CAD Viewer Build Configuration ==========")
-message(STATUS "Project: ${PROJECT_NAME}")
-message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "")
-message(STATUS "Qt6 Version: ${Qt6_VERSION}")
-message(STATUS "OpenCASCADE Path: ${OpenCASCADE_DIR}")
-message(STATUS "")
-message(STATUS "Output: ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME}")
-message(STATUS "====================================================")
-message(STATUS "")

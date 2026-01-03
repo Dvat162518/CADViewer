@@ -6,6 +6,8 @@
 [![CMake](https://img.shields.io/badge/CMake-3.16+-red?style=flat-square)](https://cmake.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](#license)
 
+[![Repository status](https://repology.org/badge/repository-big/ubuntu_22_04.svg)](https://repology.org/repository/ubuntu_22_04)
+
 A **professional-grade 3D CAD model viewer** built with **Qt6** and **OpenCASCADE (OCCT)**, featuring advanced geometric measurement, interactive selection, and comprehensive data export capabilities.
 
 ## 🎯 Features
